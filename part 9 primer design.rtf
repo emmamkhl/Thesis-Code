@@ -1,0 +1,216 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fswiss\fcharset0 Helvetica-Oblique;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red255\green255\blue255;\red43\green44\blue39;
+\red217\green0\blue89;\red18\green146\blue210;\red135\green136\blue117;\red46\green158\blue154;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;\cssrgb\c100000\c100000\c100000;\cssrgb\c22353\c22745\c20392;
+\cssrgb\c89020\c6667\c42353;\cssrgb\c0\c64314\c85882;\cssrgb\c60000\c60000\c53333;\cssrgb\c21176\c67451\c66667;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs21\fsmilli10800 \cf2 #!/bin/bash\
+# File: week9_primer_design.sh\
+\
+echo \'93week 9: primer design and validation\'94\
+\
+##### create output directories\
+mkdir -p week9_primer_design/\{decipher_analysis,specificity_screening,pipeline_integration,results,logs\}\
+mkdir -p week9_plots\
+mkdir -p week9_tables\
+\
+####### phase 1: basic primer design\
+echo \'93basic primer design..."\
+cd week9_primer_design/decipher_analysis\
+Rscript basic_primer_design_complete.R > ../../logs/phase1_primer_design.log 2>&1\
+\
+### phase 2: specificity screening\
+echo \'93phase 2"\
+cd ../specificity_screening\
+python3 assess_primer_specificity.py > ../../logs/phase2_specificity.log 2>&1\
+\
+###### phase 3: copy number analysis (MISSING COMPONENT)\
+echo "Phase 3"\
+cd ../pipeline_integration\
+Rscript copy_number_analysis.R > ../../logs/phase3_copy_numbers.log 2>&1\
+\
+##### phase 4: final integration\
+echo \'93phase 4"\
+python3 marine_qpcr_pipeline_summary.py > ../../logs/phase4_integration.log 2>&1\
+\
+##### phase 5: visualization\
+echo \'93phase 5"\
+Rscript week9_visualization.R > ../../logs/phase5_plots.log 2>&1
+\fs24 \
+\
+cd ../../\
+echo \'93week 9 primer design complete"\
+\
+#!/usr/bin/env_Rscript\
+# File: copy_number_analysis.R\
+\
+\pard\pardeftab720\partightenfactor0
+
+\fs21\fsmilli10800 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec4 library(dplyr)\
+library(readr)\
+\
+cat(\cb3 \strokec5 \'93wEEK 9: COPY NUMBER ANALYSIS \\n"\cb3 \strokec4 )\
+\
+extract_repeat_family <- \cb3 \strokec6 function\cb3 \strokec4 (target_id) \{\
+    family_mapping <- c(\
+        \cb3 \strokec5 "Hydra_vulgaris_29747"\cb3 \strokec4  = \cb3 \strokec5 "rnd-4_family-4439"\cb3 \strokec4 ,\
+        \cb3 \strokec5 "Hydra_vulgaris_28668"\cb3 \strokec4  = \cb3 \strokec5 "rnd-4_family-9"\cb3 \strokec4 , \
+        \cb3 \strokec5 "Hydra_vulgaris_25592"\cb3 \strokec4  = \cb3 \strokec5 "rnd-1_family-1354"\cb3 \strokec4 ,\
+        \cb3 \strokec5 "Hydra_vulgaris_27211"\cb3 \strokec4  = \cb3 \strokec5 "ltr-1_family-104"\cb3 \strokec4 ,\
+        \cb3 \strokec5 "Hydra_vulgaris_29570"\cb3 \strokec4  = \cb3 \strokec5 "ltr-1_family-104"\cb3 \strokec4 \
+    )\
+    return(family_mapping[target_id])\
+\}\
+\
+\pard\pardeftab720\partightenfactor0
+
+\f1\i\fs20 \cf2 \cb3 \strokec7 # Function to count repeat family occurrences
+\f0\i0\fs21\fsmilli10800 \cb3 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 count_repeat_copies <- \cb3 \strokec6 function\cb3 \strokec4 (repeat_family, species = \cb3 \strokec5 "Hydra_vulgaris"\cb3 \strokec4 ) \{\
+    repeat_data_file <- paste0(\cb3 \strokec5 "../../"\cb3 \strokec4 , species, \cb3 \strokec5 "_repeat_data.csv"\cb3 \strokec4 )\
+    \
+    \cb3 \strokec6 if\cb3 \strokec4  (!file.exists(repeat_data_file)) \{\
+        cat(\cb3 \strokec5 "Warning: repeat data file not found for"\cb3 \strokec4 , species, \cb3 \strokec5 "\\n"\cb3 \strokec4 )\
+        return(\cb3 \strokec6 NA\cb3 \strokec4 )\
+    \}\
+    \
+    repeat_data <- read_csv(repeat_data_file, show_col_types = \cb3 \strokec8 FALSE\cb3 \strokec4 )\
+    copy_count <- sum(grepl(repeat_family, repeat_data$repeat_name, fixed = \cb3 \strokec8 TRUE\cb3 \strokec4 ))\
+    \
+    return(copy_count)\
+\}\
+\
+\pard\pardeftab720\partightenfactor0
+
+\f1\i \cf2 \strokec7 #### load primer results
+\f0\i0 \strokec4 \
+primer_file <- \cb3 \strokec5 "../specificity_screening/final_primer_rankings.csv"\cb3 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \cb3 \strokec6 if\cb3 \strokec4  (file.exists(primer_file)) \{\
+    primers <- read_csv(primer_file, show_col_types = \cb3 \strokec8 FALSE\cb3 \strokec4 )\
+    \
+    
+\f1\i \strokec7 ##### add copy number analysis
+\f0\i0 \strokec4 \
+    primers$repeat_family <- sapply(primers$sequence_id, extract_repeat_family)\
+    primers$expected_copy_number <- sapply(primers$repeat_family, count_repeat_copies)\
+    \
+    
+\f1\i \strokec7 ######add sensitivity ranking based on copy numbers
+\f0\i0 \strokec4 \
+    primers$sensitivity_rank <- case_when(\
+        primers$expected_copy_number >= \cb3 \strokec8 2000\cb3 \strokec4  ~ \cb3 \strokec5 "Highest"\cb3 \strokec4 ,\
+        primers$expected_copy_number >= \cb3 \strokec8 600\cb3 \strokec4  ~ \cb3 \strokec5 "High"\cb3 \strokec4 , \
+        primers$expected_copy_number >= \cb3 \strokec8 300\cb3 \strokec4  ~ \cb3 \strokec5 "Moderate"\cb3 \strokec4 ,\
+        \cb3 \strokec8 TRUE\cb3 \strokec4  ~ \cb3 \strokec5 "Lower"\cb3 \strokec4 \
+    )\
+    \
+    
+\f1\i \strokec7 ##### save enhanced results
+\f0\i0 \strokec4 \
+    write_csv(primers, \cb3 \strokec5 "primer_pairs_with_copy_numbers.csv"\cb3 \strokec4 )\
+    \
+    cat(\cb3 \strokec5 "=== COPY NUMBER ANALYSIS RESULTS ===\\n"\cb3 \strokec4 )\
+    top_5 <- head(primers, \cb3 \strokec8 5\cb3 \strokec4 )\
+    \cb3 \strokec6 for\cb3 \strokec4  (i \cb3 \strokec6 in\cb3 \strokec4  \cb3 \strokec8 1\cb3 \strokec4 :nrow(top_5)) \{\
+        cat(sprintf(\cb3 \strokec5 "Primer %d: %s copies (%s sensitivity)\\n"\cb3 \strokec4 , \
+                   i, top_5$expected_copy_number[i], top_5$sensitivity_rank[i]))\
+    \}\
+    \
+\} \cb3 \strokec6 else\cb3 \strokec4  \{\
+    cat(\cb3 \strokec5 "Error: Primer file not found. Run Phase 2 first.\\n"\cb3 \strokec4 )\
+\}\
+\
+\
+#!/usr/bin/env Rscript\
+# File: week9_visualization.R\
+\
+library(ggplot2)\
+library(dplyr)\
+library(readr)\
+\
+cat(\'93week 9: final visualisations\\n")\
+\
+#######load primer data with copy numbers\
+primer_file <- "pipeline_integration/primer_pairs_with_copy_numbers.csv"\
+if (file.exists(primer_file)) \{\
+    primers <- read_csv(primer_file, show_col_types = FALSE)\
+    \
+    ####plot 1: final composite scores\
+    p1 <- ggplot(head(primers, 5), aes(x = reorder(paste("Primer", 1:5), final_score), \
+                                       y = final_score)) +\
+        geom_bar(stat = "identity", fill = "steelblue", alpha = 0.8) +\
+        coord_flip() +\
+        labs(title = "Final Composite Scores for Top 5 Primer Pairs",\
+             subtitle = "Scores span ~0.90\'961.10 indicating uniformly strong candidates",\
+             x = "Primer Pair", y = "Composite Score") +\
+        theme_minimal() +\
+        theme(plot.title = element_text(hjust = 0.5),\
+              plot.subtitle = element_text(hjust = 0.5))\
+    \
+    ggsave("../week9_plots/week9_primer_final_scores.png", p1, \
+           width = 10, height = 6, dpi = 300)\
+    \
+    ######plot 2: copy numbers vs sensitivity\
+    p2 <- ggplot(head(primers, 5), aes(x = reorder(paste("Primer", 1:5), expected_copy_number),\
+                                       y = expected_copy_number, \
+                                       fill = sensitivity_rank)) +\
+        geom_bar(stat = "identity", alpha = 0.8) +\
+        coord_flip() +\
+        labs(title = "Expected Copy Numbers for Top 5 Primer Targets",\
+             subtitle = "Higher copy numbers indicate greater sensitivity potential",\
+             x = "Primer Pair", y = "Expected Copy Number (per genome)",\
+             fill = "Sensitivity Rank") +\
+        theme_minimal() +\
+        theme(plot.title = element_text(hjust = 0.5),\
+              plot.subtitle = element_text(hjust = 0.5))\
+    \
+    ggsave("../week9_plots/week9_copy_numbers.png", p2, \
+           width = 10, height = 6, dpi = 300)\
+    \
+    cat(\'93visualizations created in week9/\\n")\
+\} else \{\
+    cat("Error: Enhanced primer file not found.\\n")\
+\}\
+\
+\
+\
+#!/usr/bin/env python3\
+# File: create_final_table.py\
+\
+import pandas as pd\
+\
+print(\'93creating TABLE 4.4")\
+\
+#######load enhanced primer data\
+primer_file = "primer_pairs_with_copy_numbers.csv"\
+primers = pd.read_csv(primer_file)\
+\
+#########create final table matching your dissertation format\
+final_table = primers.head(5).copy()\
+final_table['rank'] = range(1, 6)\
+final_table['target_id'] = final_table['sequence_id'].str.replace('_len.*', '', regex=True)\
+\
+######reorder columns to match Table 4.4\
+table_4_4 = final_table[[\
+    'rank', 'target_id', 'repeat_family', 'amplicon_length', \
+    'expected_copy_number', 'forward_primer', 'reverse_primer', \
+    'dimer_risk', 'final_score', 'sensitivity_rank'\
+]].copy()\
+\
+table_4_4.columns = [\
+    'Rank', 'Target ID', 'Repeat Family', 'Amplicon (bp)', \
+    'Expected Copy Number', 'Forward Primer', 'Reverse Primer',\
+    'Dimer Risk', 'Final Score', 'Sensitivity Rank'\
+]\
+\
+######save final table\
+table_4_4.to_csv('../week9_tables/table_4_4_final_primers.csv', index=False)\
+\
+print(\'93table 4.4 created")\
+print(table_4_4.to_string(index=False))}

@@ -1,0 +1,160 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 #!/usr/bin/env Rscript\
+# File: week4_repeat_filtering.R\
+\
+library(dplyr)\
+library(ggplot2)\
+library(readr)\
+library(stringr)\
+\
+cat(\'93repeat filtering and metrics extraction\\n\'94)\
+\
+##### function to parse repeatmasker output\
+parse_repeatmasker <- function(out_file) \{\
+    if (!file.exists(out_file)) \{\
+        cat("warning: file not found:", out_file, "\\n")\
+        return(NULL)\
+    \}\
+    \
+    # read repeatmasker .out file (skip header lines)\
+    tryCatch(\{\
+        data <- read.table(out_file, skip = 3, stringsAsFactors = FALSE, fill = TRUE)\
+        \
+        # check if data has correct number of columns\
+        if (ncol(data) >= 15) \{\
+            colnames(data) <- c("score", "div", "del", "ins", "query", "begin", "end", \
+                               "left", "strand", "repeat", "class", "rep_begin", "rep_end", "rep_left", "id")\
+            \
+            # calculate length and apply filters\
+            data$length <- data$end - data$begin + 1\
+            \
+            # filter criteria: length > 200bp, divergence < 20%, exclude simple repeats\
+            filtered_data <- data %>%\
+                filter(length > 200,\
+                       div < 20,\
+                       !grepl("Simple_repeat|Low_complexity|Satellite", class, ignore.case = TRUE)) %>%\
+                mutate(complexity = ifelse(grepl("Unknown|unclassified", class, ignore.case = TRUE), "low", "high"))\
+            \
+            return(filtered_data)\
+        \} else \{\
+            cat("warning: unexpected file format for", out_file, "\\n")\
+            return(NULL)\
+        \}\
+    \}, error = function(e) \{\
+        cat("error reading", out_file, ":", e$message, "\\n")\
+        return(NULL)\
+    \})\
+\}\
+\
+##### process all species\
+species_list <- c("hydra_vulgaris", "clytia_hemisphaerica", "nematostella_vectensis",\
+                 "daphnia_pulex", "hyalella_azteca", "lepeophtheirus_salmonis",\
+                 "biomphalaria_glabrata", "crassostrea_ariakensis", "crassostrea_gigas")\
+\
+phylum_map <- c("hydra_vulgaris" = "cnidaria", "clytia_hemisphaerica" = "cnidaria", "nematostella_vectensis" = "cnidaria",\
+                "daphnia_pulex" = "crustacea", "hyalella_azteca" = "crustacea", "lepeophtheirus_salmonis" = "crustacea",\
+                "biomphalaria_glabrata" = "mollusca", "crassostrea_ariakensis" = "mollusca", "crassostrea_gigas" = "mollusca")\
+\
+##### create output directories\
+dir.create("plots", showWarnings = FALSE)\
+dir.create("tables", showWarnings = FALSE)\
+\
+all_results <- list()\
+\
+for(species in species_list) \{\
+    cat("processing", species, "\\n")\
+    \
+    out_file <- paste0("repeatmasker_output/", species, ".fna.out")\
+    filtered_repeats <- parse_repeatmasker(out_file)\
+    \
+    if (!is.null(filtered_repeats) && nrow(filtered_repeats) > 0) \{\
+        filtered_repeats$species <- species\
+        filtered_repeats$phylum <- phylum_map[species]\
+        all_results[[species]] <- filtered_repeats\
+        \
+        ##### create species-specific plots\
+        # divergence distribution\
+        p1 <- ggplot(filtered_repeats, aes(x = div)) +\
+            geom_histogram(bins = 30, fill = "steelblue", alpha = 0.7) +\
+            labs(title = paste("divergence distribution -", gsub("_", " ", species)),\
+                 x = "divergence (%)", y = "count") +\
+            theme_minimal() +\
+            theme(plot.title = element_text(hjust = 0.5))\
+        \
+        ggsave(paste0("plots/", species, "_divergence_dist.png"), p1, width = 10, height = 6, dpi = 300)\
+        \
+        # repeat class distribution\
+        class_summary <- filtered_repeats %>%\
+            count(class, sort = TRUE) %>%\
+            head(10)\
+        \
+        p2 <- ggplot(class_summary, aes(x = reorder(class, n), y = n)) +\
+            geom_bar(stat = "identity", fill = "coral", alpha = 0.7) +\
+            coord_flip() +\
+            labs(title = paste("top repeat classes -", gsub("_", " ", species)),\
+                 x = "repeat class", y = "count") +\
+            theme_minimal() +\
+            theme(plot.title = element_text(hjust = 0.5))\
+        \
+        ggsave(paste0("plots/", species, "_repeat_classes.png"), p2, width = 10, height = 6, dpi = 300)\
+        \
+        ##### summary statistics\
+        summary_stats <- filtered_repeats %>%\
+            group_by(class) %>%\
+            summarise(count = n(),\
+                     mean_length = round(mean(length), 2),\
+                     mean_divergence = round(mean(div), 2),\
+                     total_bp = sum(length),\
+                     .groups = 'drop') %>%\
+            arrange(desc(count))\
+        \
+        write_csv(summary_stats, paste0("tables/", species, "_repeat_summary.csv"))\
+        \
+        cat("  processed", nrow(filtered_repeats), "filtered repeats\\n")\
+    \} else \{\
+        cat("  no data available for", species, "\\n")\
+    \}\
+\}\
+\
+##### combine all results\
+if (length(all_results) > 0) \{\
+    combined_data <- bind_rows(all_results)\
+    write_csv(combined_data, "tables/all_species_filtered_repeats.csv")\
+    \
+    ##### cross-species analysis\
+    species_summary <- combined_data %>%\
+        group_by(species, phylum) %>%\
+        summarise(total_repeats = n(),\
+                 mean_length = round(mean(length), 2),\
+                 mean_divergence = round(mean(div), 2),\
+                 total_bp = sum(length),\
+                 unknown_percent = round(sum(grepl("Unknown|unclassified", class, ignore.case = TRUE)) / n() * 100, 1),\
+                 .groups = 'drop')\
+    \
+    write_csv(species_summary, "tables/species_summary_stats.csv")\
+    \
+    ##### phylum comparison plot\
+    p3 <- ggplot(species_summary, aes(x = reorder(species, total_repeats), y = total_repeats/1000, fill = phylum)) +\
+        geom_bar(stat = "identity") +\
+        coord_flip() +\
+        labs(title = "total filtered repeats by species",\
+             x = "species", y = "total repeats (thousands)", fill = "phylum") +\
+        theme_minimal() +\
+        theme(plot.title = element_text(hjust = 0.5))\
+    \
+    ggsave("plots/total_repeats_by_species.png", p3, width = 12, height = 8, dpi = 300)\
+    \
+    cat("\\nweek 4 analysis complete!\\n")\
+    cat("generated files:\\n")\
+    cat("- individual species plots in plots/\\n")\
+    cat("- summary tables in tables/\\n")\
+    cat("- combined dataset: all_species_filtered_repeats.csv\\n")\
+\} else \{\
+    cat("no data processed successfully\\n")\
+\}}
