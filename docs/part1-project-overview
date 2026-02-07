@@ -1,0 +1,39 @@
+Part 01 – Project Overview
+What this project is
+
+This project explores a repeat-based approach to species-specific qPCR diagnostics 
+for marine aquaculture organisms. Instead of using standard single-copy or mitochondrial markers, 
+it focuses on repetitive DNA as high-copy genomic targets that may improve detection sensitivity.
+
+The code in this repository represents the full computational workflow used in my MSc dissertation, 
+from raw genome files through to primer design.
+
+
+Why marine aquaculture?
+Marine aquaculture systems are highly vulnerable to parasites, pathogens, and invasive species. 
+Early detection is essential, but many existing molecular methods struggle with:
+low sensitivity
+poor species specificity
+reliance on conserved markers
+
+This project looks at whether genome-wide repeat content can offer a more sensitive 
+and a flexible alternative for molecular monitoring.
+
+Why repetitive DNA?
+Repetitive elements make up a large proportion of eukaryotic genomes, 
+especially in non-model marine species. While often masked or ignored,
+they have some useful properties for diagnostics: 
+high copy number (better qPCR sensitivity) 
+species-specific repeat families
+abundance across the genome
+
+Here, repeats are treated as useful signal, not background noise.
+
+What the pipeline does, in simple terms, the workflow:
+Downloads and prepares reference genomes
+Identifies repeats using de novo and similarity-based tools
+Filters repeats based on quality and structure
+Compares repeat patterns across taxa
+Clusters sequences to reduce redundancy
+Designs and scores qPCR primer candidates
+Each step is documented and implemented as its own “Part” in this repository.
